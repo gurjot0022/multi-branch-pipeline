@@ -4,7 +4,7 @@ pipeline {
     environment {
         // DockerHub ya apni registry ki credentials ID (Jenkins credentials mein store karo)
         DOCKER_CREDENTIALS_ID = 'dockerhub-creds'
-        DOCKER_IMAGE_NAME     = 'your-dockerhub-username/your-app-name'
+        DOCKER_IMAGE_NAME     = 'ruchika329/docker-based-pipeline'
         IMAGE_TAG             = "${env.BUILD_NUMBER}"
 
         // Deploy targets (apne server IPs/hostnames se replace karo)
