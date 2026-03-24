@@ -89,24 +89,18 @@ pipeline {
         // STAGE 4: DOCKER IMAGE BUILD & PUSH
         // Final production image build karke registry push
         // ─────────────────────────────────────────────
+        
         stage('Docker Image Build & Push') {
-            steps {
-                echo ">>> Docker image build ho rahi hai: ${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS_ID) {
-                        def appImage = docker.build(
-                            "${DOCKER_IMAGE_NAME}:${IMAGE_TAG}",
-                            "--build-arg BUILD_NUMBER=${IMAGE_TAG} ."
-                        )
-                        // Build number tag ke saath push
-                        appImage.push()
-                        // Latest tag bhi push karo
-                        appImage.push('latest')
-                        echo ">>> Image successfully push ho gayi: ${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
-                    }
-                }
-            }
-        }
+    steps {
+        echo ">>> Docker image build ho rahi hai: ruchika329/docker-based-pipeline:${IMAGE_TAG}"
+        sh """
+            docker build -t ruchika329/docker-based-pipeline:${IMAGE_TAG} .
+            docker tag ruchika329/docker-based-pipeline:${IMAGE_TAG} ruchika329/docker-based-pipeline:latest
+            docker push ruchika329/docker-based-pipeline:${IMAGE_TAG}
+            docker push ruchika329/docker-based-pipeline:latest
+        """
+    }
+}
 
         // ─────────────────────────────────────────────
         // STAGE 5a: DEPLOY → DEV
