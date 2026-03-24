@@ -2,195 +2,117 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_CREDENTIALS_ID = 'dockerhub-creds'
-        DOCKER_IMAGE_NAME     = 'ruchikaranaa/docker-based-pipeline'
-        IMAGE_TAG             = "${env.BUILD_NUMBER}"
-
-        DEV_SERVER            = 'dev-server.example.com'
-        STAGING_SERVER        = 'staging-server.example.com'
-        PROD_SERVER           = 'prod-server.example.com'
-
-        SSH_CREDENTIALS_ID    = 'ssh-deploy-key'
-    }
-
-    options {
-        timestamps()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 60, unit: 'MINUTES')
+        APP_NAME        = 'django-notes-app'
+        AWS_REGION      = 'us-east-1'
+        ECR_REGISTRY    = 'YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com'   // ← Yeh change karna hai
+        IMAGE_TAG       = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        DOCKER_IMAGE    = "${ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
     }
 
     stages {
+        stage('Branch Info') {
+            steps {
+                echo "🌿 Branch: ${env.BRANCH_NAME}"
+                echo "🔨 Build Number: ${env.BUILD_NUMBER}"
+            }
+        }
 
-        // ─────────────────────────────────────────────
-        // STAGE 1: SOURCE CODE CHECKOUT
-        // ─────────────────────────────────────────────
         stage('Checkout') {
             steps {
-                echo '>>> Source code checkout...'
                 checkout scm
-                echo ">>> Git Branch: ${env.GIT_BRANCH}"
-                echo ">>> Git Commit: ${env.GIT_COMMIT}"
+                echo '✅ Git se source code pull ho gaya'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 2: BUILD
-        // ─────────────────────────────────────────────
         stage('Build') {
             steps {
-                echo '>>> Application build...'
-                sh '''
-                    echo "Build environment check:"
-                    docker version
-                    docker compose version || true
-                    echo "Source files:"
-                    ls -la
-                '''
+                echo '✅ App compile / artifacts ready'
+                sh 'pip install -r requirements.txt'
+                sh 'python manage.py collectstatic --noinput'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 3: TEST
-        // ─────────────────────────────────────────────
         stage('Test') {
             steps {
-                echo '>>> Tests chal rahe hain...'
-                sh """
-                    docker build --target test -t ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} . || \
-                    docker build -t ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} .
-
-                    docker run --rm \
-                        --name test-runner-${IMAGE_TAG} \
-                        ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} \
-                        sh -c "echo 'Tests pass!' && exit 0"
-
-                    docker rmi ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} || true
-                """
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
-                }
+                echo '✅ Unit + integration tests run'
+                sh 'python manage.py test'
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 4: DOCKER IMAGE BUILD & PUSH
-        // Uses stored DockerHub credentials securely
-        // ─────────────────────────────────────────────
-        stage('Docker Image Build & Push') {
+        stage('Docker image build') {
+            when {
+                anyOf {
+                    branch 'dev'
+                    branch 'feature/*'
+                    branch 'main'
+                    branch 'prod'
+                }
+            }
             steps {
-                echo ">>> Docker image build: ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}"
-                withDockerRegistry([credentialsId: "${DOCKER_CREDENTIALS_ID}", url: '']) {
+                echo '✅ Docker image build + ECR push'
+                script {
                     sh """
-                        docker build -t ruchikaranaa/docker-based-pipeline:${IMAGE_TAG} .
-                        docker tag ruchikaranaa/docker-based-pipeline:${IMAGE_TAG} $ruchikaranaa/docker-based-pipeline:latest
-                        docker push ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                        docker push ruchikaranaa/docker-based-pipeline:latest
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        docker build -t ${DOCKER_IMAGE} .
+                        docker push ${DOCKER_IMAGE}
                     """
                 }
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 5a: DEPLOY → DEV
-        // Runs on every branch push
-        // ─────────────────────────────────────────────
+        // ================== Deploy Section (Photo jaisa) ==================
         stage('Deploy: Dev') {
+            when { anyOf { branch 'dev'; branch 'feature/*' } }
             steps {
-                echo ">>> Dev deploy..."
+                echo '🚀 Deploy: Dev - Auto deploy, fast feedback'
                 sh """
-                    docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    docker stop app-dev || true
-                    docker rm   app-dev || true
-                    docker run -d \
-                        --name app-dev \
-                        --restart unless-stopped \
-                        -p 8081:80 \
-                        ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    echo "Dev deploy complete!"
+                    aws ecs update-service --cluster dev-cluster-name \
+                    --service dev-service-name --force-new-deployment --region ${AWS_REGION}
                 """
+            }
+            post {
+                success { echo '✅ Success + Notify (Dev)' }
             }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 5b: DEPLOY → STAGING
-        // Only on main / develop branch
-        // ─────────────────────────────────────────────
         stage('Deploy: Staging') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'develop'
-                }
-            }
+            when { branch 'main' }
             steps {
-                echo ">>> Staging deploy..."
+                input message: 'QA testing, approval gate - Approve for Staging?', ok: 'Approve'
+                echo '🚀 Deploy: Staging - QA testing, approval gate'
                 sh """
-                    docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    docker stop app-staging || true
-                    docker rm   app-staging || true
-                    docker run -d \
-                        --name app-staging \
-                        --restart unless-stopped \
-                        -p 8082:80 \
-                        ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    echo "Staging deploy complete!"
+                    aws ecs update-service --cluster staging-cluster-name \
+                    --service staging-service-name --force-new-deployment --region ${AWS_REGION}
                 """
             }
+            post {
+                success { echo '✅ Success + Notify (Staging)' }
+            }
         }
 
-        // ─────────────────────────────────────────────
-        // STAGE 5c: DEPLOY → PRODUCTION
-        // Only on main branch + manual approval required
-        // ─────────────────────────────────────────────
-        stage('Deploy: Production') {
-            when {
-                branch 'main'
-            }
+        stage('Deploy: Prod') {
+            when { branch 'prod' }
             steps {
-                // Manual gate — pipeline pauses here until approved
-                timeout(time: 30, unit: 'MINUTES') {
-                    input message: "Deploy build #${IMAGE_TAG} to PRODUCTION?",
-                          ok: 'Yes, deploy!'
-                }
-                echo ">>> Production deploy..."
+                input message: 'Manual approval required - Approve for Production?', ok: 'Deploy to Prod'
+                echo '🚀 Deploy: Prod - Manual approval required'
                 sh """
-                    docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    docker stop app-prod || true
-                    docker rm   app-prod || true
-                    docker run -d \
-                        --name app-prod \
-                        --restart unless-stopped \
-                        -p 8083:80 \
-                        ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
-                    echo "Production deploy complete!"
+                    aws ecs update-service --cluster prod-cluster-name \
+                    --service prod-service-name --force-new-deployment --region ${AWS_REGION}
                 """
             }
-        }
-
-    } // end stages
-
-    // ─────────────────────────────────────────────
-    // POST ACTIONS  ← must be OUTSIDE stages block
-    // ─────────────────────────────────────────────
-    post {
-        success {
-            echo " Pipeline SUCCESSFUL! Build #${IMAGE_TAG}"
-            // mail to: 'team@example.com',
-            //      subject: "SUCCESS: Build #${IMAGE_TAG}",
-            //      body: "Pipeline successfully complete ho gayi."
-        }
-        failure {
-            echo " Pipeline FAILED! Build #${IMAGE_TAG}"
-            // mail to: 'team@example.com',
-            //      subject: "FAILED: Build #${IMAGE_TAG}",
-            //      body: "Pipeline fail ho gayi. Logs check karo."
-        }
-        always {
-            echo '>>> Cleanup: Dangling Docker images remove...'
-            sh 'docker image prune -f || true'
+            post {
+                success { echo '✅ Success + Notify (Prod)' }
+            }
         }
     }
 
+    post {
+        failure {
+            echo '❌ Koi bhi stage fail hone par → Fail + Alert'
+            // yahan Slack/Email alert add kar sakte ho
+        }
+        always {
+            echo "Pipeline complete for branch: ${env.BRANCH_NAME}"
+        }
+    }
 }
