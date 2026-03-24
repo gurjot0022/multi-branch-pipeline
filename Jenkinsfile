@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     environment {
-        // DockerHub ya apni registry ki credentials ID (Jenkins credentials mein store karo)
+       
         DOCKER_CREDENTIALS_ID = 'dockerhub-creds'
         DOCKER_IMAGE_NAME     = 'ruchikaranaa/docker-based-pipeline'
         IMAGE_TAG             = "${env.BUILD_NUMBER}"
 
-        // Deploy targets (apne server IPs/hostnames se replace karo)
+        // Deploy targets 
         DEV_SERVER            = 'dev-server.example.com'
         STAGING_SERVER        = 'staging-server.example.com'
         PROD_SERVER           = 'prod-server.example.com'
@@ -29,7 +29,7 @@ pipeline {
         // ─────────────────────────────────────────────
         stage('Checkout') {
             steps {
-                echo '>>> Source code checkout ho raha hai...'
+                echo '>>> Source code checkout...'
                 checkout scm
                 echo ">>> Git Branch: ${env.GIT_BRANCH}"
                 echo ">>> Git Commit: ${env.GIT_COMMIT}"
@@ -38,11 +38,11 @@ pipeline {
 
         // ─────────────────────────────────────────────
         // STAGE 2: BUILD
-        // Docker multi-stage build ke pehle app compile
+        // Docker multi-stage build 
         // ─────────────────────────────────────────────
         stage('Build') {
             steps {
-                echo '>>> Application build ho rahi hai...'
+                echo '>>> Application build ...'
                 // Agar aapke paas build script hai (jaise npm install, maven, etc.)
                 // Yahan Docker ke andar build hogi, isliye simple validation bhi chalega
                 sh '''
@@ -57,29 +57,29 @@ pipeline {
 
         // ─────────────────────────────────────────────
         // STAGE 3: TEST
-        // Docker container ke andar tests run karo
+        // Docker container tests run 
         // ─────────────────────────────────────────────
         stage('Test') {
             steps {
                 echo '>>> Tests chal rahe hain...'
                 sh '''
-                    # Docker image temporarily build karo sirf test ke liye
-                    docker build --target test -t ${DOCKER_IMAGE_NAME}:test-${IMAGE_TAG} . || \
-                    docker build -t ${DOCKER_IMAGE_NAME}:test-${IMAGE_TAG} .
+                    # Docker image temporarily build
+                    docker build --target test -t ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} . || \
+                    docker build -t ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} .
 
-                    # Container mein tests run karo
+                    # Container mein tests
                     docker run --rm \
                         --name test-runner-${IMAGE_TAG} \
-                        ${DOCKER_IMAGE_NAME}:test-${IMAGE_TAG} \
-                        sh -c "echo 'Tests pass ho gaye!' && exit 0"
+                        ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} \
+                        sh -c "echo 'Tests pass !' && exit 0"
 
                     # Test image cleanup
-                    docker rmi ${DOCKER_IMAGE_NAME}:test-${IMAGE_TAG} || true
+                    docker rmi ruchikaranaa/docker-based-pipeline:test-${IMAGE_TAG} || true
                 '''
             }
             post {
                 always {
-                    // Test reports publish karo (agar JUnit format mein hain)
+                    // Test reports publish
                     junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
                 }
             }
@@ -87,12 +87,12 @@ pipeline {
 
         // ─────────────────────────────────────────────
         // STAGE 4: DOCKER IMAGE BUILD & PUSH
-        // Final production image build karke registry push
+        // Final production image build registry push
         // ─────────────────────────────────────────────
         
         stage('Docker Image Build & Push') {
     steps {
-        echo ">>> Docker image build ho rahi hai: ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}"
+        echo ">>> Docker image build ... : ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}"
         sh """
             docker build -t ruchikaranaa/docker-based-pipeline:${IMAGE_TAG} .
             docker tag ruchikaranaa/docker-based-pipeline:${IMAGE_TAG} ruchikaranaa/docker-based-pipeline:latest
@@ -108,7 +108,7 @@ pipeline {
         // ─────────────────────────────────────────────
        stage('Deploy: Dev') {
     steps {
-        echo ">>> Dev par deploy ho raha hai..."
+        echo ">>> Dev deploy ..."
         sh """
             docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
             docker stop app-dev || true
@@ -124,11 +124,11 @@ pipeline {
 }
         // ─────────────────────────────────────────────
         // STAGE 5b: DEPLOY → STAGING
-        // Dev ke baad automatically staging par deploy
+        // Dev automatically staging deploy
         // ─────────────────────────────────────────────
         stage('Deploy: Staging') {
     steps {
-        echo ">>> Staging par deploy ho raha hai..."
+        echo ">>> Staging deploy ..."
         sh """
             docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
             docker stop app-staging || true
@@ -145,11 +145,11 @@ pipeline {
 
         // ─────────────────────────────────────────────
         // STAGE 5c: DEPLOY → PRODUCTION
-        // Manual approval ke baad hi production deploy
+        // Manual approval production deploy
         // ─────────────────────────────────────────────
        stage('Deploy: Production') {
     steps {
-        echo ">>> Production par deploy ho raha hai..."
+        echo ">>> Production deploy ..."
         sh """
             docker pull ruchikaranaa/docker-based-pipeline:${IMAGE_TAG}
             docker stop app-prod || true
@@ -169,20 +169,20 @@ pipeline {
     // ─────────────────────────────────────────────
     post {
         success {
-            echo "Pipeline SUCCESSFUL hai! Build #${IMAGE_TAG}"
+            echo "Pipeline SUCCESSFULL! Build #${IMAGE_TAG}"
             // Email notification (Jenkins Email plugin chahiye)
             // mail to: 'team@example.com',
             //      subject: "SUCCESS: Build #${IMAGE_TAG}",
             //      body: "Pipeline successfully complete ho gayi."
         }
         failure {
-            echo "Pipeline FAIL ho gayi! Build #${IMAGE_TAG}"
+            echo "Pipeline FAIL! Build #${IMAGE_TAG}"
             // mail to: 'team@example.com',
             //      subject: "FAILED: Build #${IMAGE_TAG}",
             //      body: "Pipeline fail ho gayi. Logs check karo."
         }
         always {
-            echo '>>> Cleanup: Dangling Docker images remove kar rahe hain...'
+            echo '>>> Cleanup: Dangling Docker images remove ...'
             sh 'docker image prune -f || true'
         }
     }
