@@ -3,7 +3,7 @@ pipeline {
 
     stages {
 
-        stage('Clean') {
+        stage('Clean Workspace') {
             steps {
                 deleteDir()
             }
@@ -12,19 +12,24 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (env.BRANCH_NAME == 'main') {
-                        sh 'cp -r . /var/www/main/'
-                        echo 'Main branch - deployed to main server'
-                    } 
-                    else if (env.BRANCH_NAME == 'feature') {
-                        sh 'cp -r . /var/www/feature/'
-                        echo 'Feature branch - deployed to feature server'
-                    } 
+                    if (env.BRANCH_NAME == 'feature') {
+                        sh '''
+                            sudo rm -rf /var/www/feature/*
+                            sudo cp -r . /var/www/feature/
+                            sudo chown -R www-data:www-data /var/www/feature/
+                            echo "Feature deployed successfully!"
+                        '''
+                    }
+                    else if (env.BRANCH_NAME == 'main') {
+                        sh '''
+                            sudo rm -rf /var/www/main/*
+                            sudo cp -r . /var/www/main/
+                            sudo chown -R www-data:www-data /var/www/main/
+                            echo "Main deployed successfully!"
+                        '''
+                    }
                     else if (env.BRANCH_NAME == 'prefix') {
-                        echo 'Prefix branch - only checking, not deploying'
-                    } 
-                    else {
-                        echo "Unknown branch: ${env.BRANCH_NAME} - skipping"
+                        echo 'Prefix branch - only checking'
                     }
                 }
             }
