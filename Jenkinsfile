@@ -1,6 +1,5 @@
 pipeline {
     agent any
-
     stages {
 
         stage('Clean') {
@@ -9,10 +8,15 @@ pipeline {
             }
         }
 
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Deploy') {
             steps {
                 script {
-                    // GIT_BRANCH = "origin/feature" format mein aata hai
                     def branch = env.GIT_BRANCH?.replaceAll('origin/', '').trim()
                     
                     echo "Branch hai: ${branch}"
@@ -21,7 +25,6 @@ pipeline {
                         sh '''
                             sudo rm -rf /var/www/feature/*
                             sudo cp -r * /var/www/feature/
-                            
                         '''
                         echo 'Feature deployed!'
                     }
@@ -29,7 +32,6 @@ pipeline {
                         sh '''
                             sudo rm -rf /var/www/main/*
                             sudo cp -r * /var/www/main/
-                            
                         '''
                         echo 'Main deployed!'
                     }
