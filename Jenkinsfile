@@ -9,37 +9,24 @@ pipeline {
             }
         }
 
-        stage('Deploy Main') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'main'
-                }
-            }
+        stage('Deploy') {
             steps {
-                sh 'cp -r . /var/www/main/'
-            }
-        }
-
-        stage('Deploy Feature') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'feature'
+                script {
+                    if (env.BRANCH_NAME == 'main') {
+                        sh 'cp -r . /var/www/main/'
+                        echo 'Main branch - deployed to main server'
+                    } 
+                    else if (env.BRANCH_NAME == 'feature') {
+                        sh 'cp -r . /var/www/feature/'
+                        echo 'Feature branch - deployed to feature server'
+                    } 
+                    else if (env.BRANCH_NAME == 'prefix') {
+                        echo 'Prefix branch - only checking, not deploying'
+                    } 
+                    else {
+                        echo "Unknown branch: ${env.BRANCH_NAME} - skipping"
+                    }
                 }
-            }
-            steps {
-                sh 'cp -r . /var/www/feature/'
-            }
-        }
-
-        stage('Prefix Check') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'prefix'
-                }
-            }
-            steps {
-                echo "Branch hai: ${env.BRANCH_NAME}"
-                echo 'Prefix branch - only checking'
             }
         }
 
