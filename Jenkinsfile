@@ -23,8 +23,8 @@ pipeline {
 
                     if (branch == 'feature') {
                         sh '''
-                            sudo rm -rf /var/www/feature/*
-                            sudo cp -r * /var/www/feature/
+                            sudo rm -rf /var/www/dev/*
+                            sudo cp -r * /var/www/dev/
                         '''
                         echo 'Feature deployed!'
                     }
