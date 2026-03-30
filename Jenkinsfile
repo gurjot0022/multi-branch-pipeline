@@ -21,7 +21,7 @@ pipeline {
                     
                     echo "Branch hai: ${branch}"
 
-                    if (branch == 'feature') {
+                    if (branch == 'dev') {
                         sh '''
                             sudo rm -rf /var/www/dev/*
                             sudo cp -r * /var/www/dev/
